@@ -107,8 +107,39 @@ test('a stalled trace counts as no signal', () => {
     p.tick(t);
   }
   let out;
-  for (const end = t + 6; t < end; t += 0.1) out = p.tick(t);
+  for (const end = t + 8; t < end; t += 0.1) out = p.tick(t);
   assert.equal(out.state, State.SEARCHING);
+});
+
+test('rates without a chest trace still wake the puppy, with the chest unknown', () => {
+  const p = new Pipeline();
+  let out;
+  for (let t = 0; t < 10; t += 0.1) {
+    if (Math.round(t * 10) % 10 === 0) p.onRates(t, { pulse: 72, breathing: 13 });
+    out = p.tick(t);
+  }
+  assert.equal(out.line, 'V,72,13.0,1,x\n');
+});
+
+test('advice from the source does not blank the puppy while data keeps flowing', () => {
+  const p = new Pipeline();
+  let out;
+  for (let t = 0; t < 10; t += 0.1) {
+    p.onTracking(t, true); // e.g. "chest not visible": someone is there
+    p.onTrace(t, Math.sin(t), t);
+    out = p.tick(t);
+  }
+  assert.equal(out.state, State.AWAKE);
+});
+
+test('packets with nothing usable in them keep the signal alive but show no numbers', () => {
+  const p = new Pipeline();
+  let out;
+  for (let t = 0; t < 10; t += 0.1) {
+    p.onData(t);
+    out = p.tick(t);
+  }
+  assert.equal(out.line, 'V,x,x,1,x\n');
 });
 
 test('extractMetrics reads the SDK message shape and skips samples it has already seen', () => {

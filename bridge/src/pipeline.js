@@ -12,15 +12,20 @@ export class Pipeline {
     detector = new BreathHoldDetector(),
     brain = new PuppyBrain(),
     scaler = new ChestScaler(),
-    staleSeconds = 3, // no chest samples for this long = no signal
+    staleSeconds = 5, // nothing at all from the source for this long = no signal
+    traceStaleSeconds = 3, // no chest samples for this long = chest unknown
     rateTtlSeconds = 20, // a rate older than this is shown as unknown
   } = {}) {
     this.detector = detector;
     this.brain = brain;
     this.scaler = scaler;
     this.staleSeconds = staleSeconds;
+    this.traceStaleSeconds = traceStaleSeconds;
     this.rateTtlSeconds = rateTtlSeconds;
-    this.tracked = false;
+    // Assume someone is there until the source says otherwise; without data
+    // arriving the signal is not valid anyway.
+    this.tracked = true;
+    this.lastDataAt = -Infinity;
     this.lastTraceAt = -Infinity;
     this.pulse = { value: NaN, at: -Infinity };
     this.breathing = { value: NaN, at: -Infinity };
@@ -31,6 +36,7 @@ export class Pipeline {
   onTrace(now, raw, sampleT = now) {
     if (!Number.isFinite(raw)) return;
     this.lastTraceAt = now;
+    this.lastDataAt = now;
     this.detector.push(sampleT, raw, this.tracked);
     this.chest = this.scaler.push(sampleT, raw);
   }
@@ -38,6 +44,12 @@ export class Pipeline {
   onRates(now, { pulse, breathing } = {}) {
     if (pulse > 0) this.pulse = { value: pulse, at: now };
     if (breathing > 0) this.breathing = { value: breathing, at: now };
+    if (pulse > 0 || breathing > 0) this.lastDataAt = now;
+  }
+
+  /** The source produced something, even if none of it was usable yet. */
+  onData(now) {
+    this.lastDataAt = now;
   }
 
   onTracking(now, ok) {
@@ -52,18 +64,19 @@ export class Pipeline {
   }
 
   tick(now) {
-    const valid = this.tracked && now - this.lastTraceAt < this.staleSeconds;
+    const valid = this.tracked && now - this.lastDataAt < this.staleSeconds;
+    const traceFresh = now - this.lastTraceAt < this.traceStaleSeconds;
     const fresh = (r) => (valid && now - r.at < this.rateTtlSeconds ? r.value : NaN);
     const pulse = fresh(this.pulse);
     const breathing = fresh(this.breathing);
-    const hold = valid && this.detector.holding;
+    const hold = valid && traceFresh && this.detector.holding;
     const state = this.brain.update({ t: now, valid, hold, pulse, breathing });
     // While searching, the board is told nothing but the mood.
     const show = state !== State.SEARCHING;
     const out = {
       pulse: show ? pulse : NaN,
       breathing: show ? breathing : NaN,
-      chest: show ? this.chest : NaN,
+      chest: show && traceFresh ? this.chest : NaN,
       state,
       valid,
     };

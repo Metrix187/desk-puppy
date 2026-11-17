@@ -23,7 +23,8 @@ Options
   --invert           flip the board's colour inversion (it remembers), then exit
   --dry-run         do not use a board; just show what would be sent
   --loose            also use readings the SDK has not marked as stable
-  --debug            print every line sent to the board
+  --debug            print one diagnostic line a second (what the SDK is sending, and
+                     the line going to the board); terminal only, nothing is saved
   --seconds <n>      stop by itself after n seconds
   --help
 `;
@@ -77,6 +78,9 @@ function pickCamera(cameras, wanted) {
 const cameraLabel = (c) => c.name ?? 'unnamed camera';
 
 function statusLine(out, extra) {
+  // While searching there are no numbers to show, so the reason goes first
+  // where a narrow terminal will not cut it off.
+  if (out.state === 0) return [STATE_NAMES[0], extra].filter(Boolean).join(': ');
   const num = (v, digits, unit) => (Number.isFinite(v) ? `${v.toFixed(digits)} ${unit}` : `-- ${unit}`);
   return [
     STATE_NAMES[out.state].padEnd(11),
@@ -187,13 +191,47 @@ async function main() {
 
   source.on('trace', (raw, sampleT) => pipeline.onTrace(now(), raw, sampleT));
   source.on('rates', (rates) => pipeline.onRates(now(), rates));
-  source.on('tracking', (ok, text) => {
-    pipeline.onTracking(now(), ok);
-    if (!args.fake) hint = ok ? '' : text;
+  // What the SDK last told us, for the status line and --debug.
+  const seen = { present: true, advice: '', check: 'none yet', sdk: 'starting', anyData: false };
+  const second = { packets: 0, newTrace: 0, last: null };
+
+  source.on('tracking', (present, advice, checkName) => {
+    pipeline.onTracking(now(), present);
+    if (args.fake) return;
+    Object.assign(seen, { present, advice, check: checkName ?? seen.check });
   });
   source.on('status', (status) => {
-    if (args.debug) console.log(`\n[sdk] ${status}`);
+    seen.sdk = status;
   });
+  source.on('packet', (p) => {
+    second.packets++;
+    second.newTrace += p.newTrace;
+    second.last = p;
+    if (p.upper || p.lower || p.rate || p.pulse) {
+      seen.anyData = true;
+      pipeline.onData(now());
+    }
+  });
+
+  const liveHint = (searching) => {
+    if (!seen.present) return seen.advice || 'nobody in view';
+    if (!seen.anyData) return [`waiting for the SDK (${seen.sdk})`, seen.advice].filter(Boolean).join(', ');
+    if (searching) return seen.advice || 'the SDK has stopped sending data';
+    return seen.advice;
+  };
+
+  const debugLine = (out) => {
+    const p = second.last;
+    const flag = (n, stable) => (n ? `${n}(${stable ? 'stable' : 'not stable'})` : '0');
+    const shape = p
+      ? `packets=${second.packets} newTrace=${second.newTrace} upper=${p.upper} lower=${p.lower} rate=${flag(p.rate, p.rateStable)} pulse=${flag(p.pulse, p.pulseStable)}`
+      : 'packets=0';
+    second.packets = 0;
+    second.newTrace = 0;
+    second.last = null;
+    const ref = pipeline.detector.reference;
+    return `[debug] sdk=${seen.sdk} check=${seen.check}${seen.advice ? ` "${seen.advice}"` : ''} ${shape} holdRef=${ref === null ? 'learning' : 'ready'} hold=${pipeline.detector.holding ? 'yes' : 'no'} | ${STATE_NAMES[out.state]} ${out.line.trim()}`;
+  };
   source.on('sdk-error', (e) => {
     console.error(`\nSmartSpectra error: ${e.name} - ${e.message}`);
     if (e.name === 'kAuthenticationFailed') console.error('Check SMARTSPECTRA_API_KEY in bridge/.env.');
@@ -218,9 +256,15 @@ async function main() {
     const t = now();
     const out = pipeline.tick(t);
     link?.send(out.line);
-    if (args.debug) return void process.stdout.write(out.line);
+    if (fatal) return void shutdown(1);
+    if (!args.fake) hint = liveHint(out.state === 0);
     const extra = [hint, link && !link.connected ? 'board disconnected' : ''].filter(Boolean).join(' | ');
-    if (tty) {
+    if (args.debug) {
+      if (t - lastPrint >= 1) {
+        lastPrint = t;
+        console.log(args.fake ? `[debug] ${hint} | ${STATE_NAMES[out.state]} ${out.line.trim()}` : debugLine(out));
+      }
+    } else if (tty) {
       if (t - lastPrint >= 0.2) {
         lastPrint = t;
         process.stdout.write(`\r${statusLine(out, extra)}`.padEnd(process.stdout.columns - 1).slice(0, process.stdout.columns));
@@ -230,7 +274,6 @@ async function main() {
       console.log(statusLine(out, extra));
     }
     lastState = out.state;
-    if (fatal) shutdown(1);
   }, TICK_MS);
 
   let stopping = false;

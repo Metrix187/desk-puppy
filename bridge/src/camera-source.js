@@ -66,8 +66,13 @@ export class CameraSource extends EventEmitter {
     });
 
     sdk.on('validationStatus', (code, _timestampUs, hint) => {
-      // kOk is the only code that means "a person is tracked and the signal is usable".
-      this.emit('tracking', code === ValidationCode.kOk, this.#scrub(hint) || nameOf(ValidationCode, code));
+      // Only "no face" and "several faces" mean there is nobody to measure. The
+      // other codes (too dark, not centred, chest not visible...) are advice:
+      // the SDK may still be producing data, so they are shown but not fatal.
+      const nobody = code === ValidationCode.kNoFaceFound || code === ValidationCode.kMultipleFacesFound;
+      const name = nameOf(ValidationCode, code);
+      const advice = code === ValidationCode.kOk ? '' : this.#scrub(hint) || name;
+      this.emit('tracking', !nobody, advice, name);
     });
 
     sdk.on('metrics', (buf) => {
@@ -81,6 +86,20 @@ export class CameraSource extends EventEmitter {
       const { trace, pulse, breathing } = extractMetrics(metrics, this.cursor, { loose: this.loose });
       for (const s of trace) this.emit('trace', s.v, Number.isFinite(s.t) ? s.t : undefined);
       if (pulse !== undefined || breathing !== undefined) this.emit('rates', { pulse, breathing });
+
+      // Shape of the packet, for --debug. Counts and flags only, no values.
+      const rate = metrics.breathing?.rate ?? [];
+      const pulseRate = metrics.cardio?.pulseRate ?? [];
+      this.emit('packet', {
+        bytes: buf.length,
+        upper: metrics.breathing?.upperTrace?.length ?? 0,
+        lower: metrics.breathing?.lowerTrace?.length ?? 0,
+        newTrace: trace.length,
+        rate: rate.length,
+        rateStable: !!rate.at(-1)?.stable,
+        pulse: pulseRate.length,
+        pulseStable: !!pulseRate.at(-1)?.stable,
+      });
     });
 
     sdk.on('error', (code, message, retryable) => {
