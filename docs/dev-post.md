@@ -100,11 +100,11 @@ sdk.start();
 | --- | --- |
 | searching | no valid signal |
 | breath held | the detector above |
-| excited | pulse more than 15 bpm above my session baseline |
-| sleepy | breathing under 10 a minute and pulse near baseline |
+| excited | pulse more than 20 bpm above my session baseline |
+| sleepy | breathing under 10 a minute and pulse not raised |
 | awake | otherwise |
 
-The baseline is the median of my pulse over the first 30 seconds of the session. To keep the puppy from flickering between moods at a threshold, each mood is harder to leave than to enter and has to persist for a couple of seconds before it shows.
+The baseline is the median of my pulse over the last three minutes of calm. A webcam pulse wanders by ten beats or so while I sit still, so a baseline fixed at the start went stale within minutes. To keep the puppy from flickering between moods at a threshold, each mood is harder to leave than to enter and has to persist for a couple of seconds before it shows.
 
 The SDK also reports why it cannot measure (too dark, face not centred, too far). The bridge only treats the signal as valid when that status is OK, and by default it only uses rates the SDK has marked stable. When it is not sure, the puppy shows `--` rather than a guess.
 

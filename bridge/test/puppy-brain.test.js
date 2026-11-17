@@ -119,7 +119,7 @@ test('hysteresis: breathing hovering around the sleepy threshold does not flicke
 
 test('hysteresis: pulse hovering around the excited threshold does not flicker', () => {
   const brain = new PuppyBrain();
-  const hover = (t) => 70 + 12 + 4 * Math.sin(t * 1.7); // +8 .. +16 over baseline
+  const hover = (t) => 70 + 16 + 3 * Math.sin(t * 1.7); // +13 .. +19 over baseline
   const { states } = run(brain, [calm(), { seconds: 5, pulse: 95 }, { seconds: 120, pulse: hover }]);
   assert.deepEqual(states, [State.AWAKE, State.EXCITED]);
 });
@@ -142,8 +142,42 @@ test('sleepy puppy wakes when breathing speeds up, and when the pulse climbs', (
   const sleepy = { seconds: 20, pulse: 68, breathing: 8 };
   const a = run(new PuppyBrain(), [calm(), sleepy, { seconds: 10, pulse: 68, breathing: 14 }]);
   assert.deepEqual(a.states, [State.AWAKE, State.SLEEPY, State.AWAKE]);
-  const b = run(new PuppyBrain(), [calm(), sleepy, { seconds: 10, pulse: 90, breathing: 8 }]);
+  const b = run(new PuppyBrain(), [calm(), sleepy, { seconds: 10, pulse: 95, breathing: 8 }]);
   assert.deepEqual(b.states, [State.AWAKE, State.SLEEPY, State.EXCITED]);
+});
+
+// The next three come from live sessions: a webcam pulse wanders by ten beats
+// or so while sitting still, and often starts high and settles.
+
+test('a pulse below baseline with slow breathing is sleepy too', () => {
+  const { states } = run(new PuppyBrain(), [calm(), { seconds: 20, pulse: 58, breathing: 8 }]);
+  assert.deepEqual(states, [State.AWAKE, State.SLEEPY]);
+});
+
+test('the baseline follows a pulse that starts high and settles', () => {
+  const brain = new PuppyBrain();
+  const { states } = run(brain, [
+    { seconds: 60, pulse: 96 },
+    { seconds: 240, pulse: 78 },
+    { seconds: 20, pulse: 78, breathing: 8 },
+  ]);
+  assert.ok(Math.abs(brain.baseline - 78) < 1, `baseline ${brain.baseline}`);
+  assert.deepEqual(states, [State.AWAKE, State.SLEEPY]);
+});
+
+test('the ordinary wander of a resting pulse is not excitement', () => {
+  const wander = (t) => 82 + 10 * Math.sin(t / 8) + 3 * Math.sin(t * 1.3);
+  const { states } = run(new PuppyBrain(), [{ seconds: 300, pulse: wander }]);
+  assert.deepEqual(states, [State.AWAKE]);
+});
+
+test('coming back from exercise with a much higher pulse is excitement', () => {
+  const { states } = run(new PuppyBrain(), [
+    calm(60),
+    { seconds: 40, valid: false },
+    { seconds: 20, pulse: 112, breathing: 22 },
+  ]);
+  assert.deepEqual(states, [State.AWAKE, State.SEARCHING, State.EXCITED]);
 });
 
 test('excited puppy calms down when the pulse comes back', () => {

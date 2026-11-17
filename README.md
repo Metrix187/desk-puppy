@@ -130,11 +130,12 @@ The SDK gives the bridge a pulse rate, a breathing rate and a chest movement tra
 | --- | --- |
 | searching | nobody is tracked, or the signal is not usable |
 | breath held | the breathing wave has been missing from the chest trace for about 8 seconds while you are still tracked |
-| excited | pulse more than 15 bpm above your session baseline |
-| sleepy | breathing under 10 breaths a minute and pulse within 8 bpm of your baseline |
+| excited | pulse more than 20 bpm above your session baseline |
+| sleepy | breathing under 10 breaths a minute and pulse not raised (no more than 8 bpm above your baseline) |
 | awake | everything else |
 
-- **Session baseline** is the median of your pulse over the first 30 seconds, after which it drifts slowly while the puppy is calm. It is "your usual for this sitting", nothing more.
+- **Session baseline** is the median of your pulse over the last three minutes of calm. It is "your usual for this sitting", nothing more. A webcam pulse wanders by ten beats or so while you sit still and often starts high and settles, which is why the baseline keeps moving and why "excited" needs a clear 20 bpm. To see the zoomies, do something that properly raises your pulse and sit back down.
+- **Breathing rate on screen.** The SDK marks most breathing-rate readings as not stable, and stable ones can be half a minute apart. The last stable one stays on screen for up to 45 seconds; a pulse reading for 20.
 - **Breath hold.** The SDK lists an apnea metric but marks it unavailable, so the bridge has its own detector. When I measured a real held breath, the chest trace did not go flat: the breathing wave disappeared but a ripple at about heartbeat rate stayed, roughly a third the size of a breath. So the detector smooths the trace over one second to remove the ripple, then checks how far it swings over the last 8 seconds. It spends the first half minute learning what is normal for you, and calls it a hold when the swing stays under four tenths of that. It lets go within a few seconds of the next breath. Shifting in your chair makes jumps much bigger than a breath, so "normal" is taken from the quieter side of what it has seen, and no hold is raised while the SDK is complaining about the view (chest not visible, too dark and so on).
 - **Its limits.** Expect the puppy to react about 10 seconds into a hold. Breathing that suddenly becomes very shallow, under about four tenths of your usual depth, looks the same as a hold to this detector; if that lasts 45 seconds it gives up and relearns. `npm run calibrate` shows how your own trace behaves if you want to retune it.
 - **Smoothing.** Pulse and breathing readings arrive about once a second and single ones can be well off, so the puppy follows the median of the last 6 seconds.
@@ -190,6 +191,10 @@ The SDK's native runtime is closed source, so the statements about what it trans
 - **Pulse or breathing shows `--`.** By default only readings the SDK marks as stable are shown. Give it half a minute of sitting still in good light, or try `--loose`.
 - **`kAuthenticationFailed`.** Check the key in `bridge/.env`.
 - **npm warns about install scripts.** The SDK and serialport ship prebuilt binaries; on my machine they load without the scripts running.
+
+## License
+
+The code in this repository is under the [MIT License](LICENSE). The SmartSpectra SDK it depends on is proprietary and has its own license; it is installed from npm and is not part of this repository.
 
 ## Credits
 

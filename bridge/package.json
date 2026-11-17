@@ -16,6 +16,7 @@
     "test": "node --test",
     "set-key": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/set-api-key.ps1"
   },
+  "license": "MIT",
   "dependencies": {
     "@smartspectra/node-sdk": "^3.5.0",
     "serialport": "^13.0.0"

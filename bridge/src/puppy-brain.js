@@ -3,7 +3,7 @@
 //   no valid signal                                   -> searching (0)
 //   breath hold detected                              -> breath held (3)
 //   pulse well above the session baseline             -> excited (4)
-//   breathing under ~10/min and pulse near baseline   -> sleepy (2)
+//   breathing under ~10/min and pulse not raised      -> sleepy (2)
 //   otherwise                                         -> awake (1)
 //
 // Two kinds of hysteresis keep the puppy from flickering between moods:
@@ -15,17 +15,20 @@
 import { State } from './protocol.js';
 
 const DEFAULTS = Object.freeze({
-  baselineMinSeconds: 10, // pulse data needed before a baseline exists
-  baselineSettleSeconds: 30, // the baseline is the median of this first stretch
-  baselineDriftSeconds: 300, // afterwards it follows calm readings this slowly
+  // The baseline is the median pulse over the last few minutes of calm. A live
+  // webcam pulse wanders by ten beats or so while sitting still, so a baseline
+  // fixed at the start of the session goes stale within minutes.
+  baselineMinSeconds: 10, // calm pulse data needed before a baseline exists
+  baselineWindowSeconds: 180,
 
-  excitedEnterBpm: 15, // above baseline to become excited
-  excitedExitBpm: 8, // above baseline to stay excited
+  excitedEnterBpm: 20, // above baseline to become excited (clear of the wander)
+  excitedExitBpm: 12, // above baseline to stay excited
 
   sleepyEnterBreaths: 10, // breaths/min below which the puppy can doze
   sleepyExitBreaths: 11.5,
-  sleepyEnterNearBpm: 8, // "near baseline" when entering
-  sleepyExitNearBpm: 12, // and when staying
+  // "Pulse near baseline" means not raised. A pulse below baseline is calm too.
+  sleepyEnterNearBpm: 8, // at most this far above baseline to doze off
+  sleepyExitNearBpm: 12, // and to stay asleep
 
   // Seconds a mood must persist before the puppy switches to it.
   dwell: Object.freeze({
@@ -33,7 +36,7 @@ const DEFAULTS = Object.freeze({
     [State.AWAKE]: 2,
     [State.SLEEPY]: 4,
     [State.HOLD]: 0, // the hold detector has already waited ~8 s
-    [State.EXCITED]: 2,
+    [State.EXCITED]: 3,
   }),
   leaveHoldDwell: 0.7,
 });
@@ -53,31 +56,23 @@ export class PuppyBrain {
     this.candidate = State.SEARCHING;
     this.candidateSince = null;
     this.baseline = null;
-    this.early = []; // { t, pulse } readings from the start of the session
-    this.firstPulseT = null;
+    this.calm = []; // one { t, pulse } a second from calm stretches
+    this.calmSeconds = 0;
     this.lastT = null;
   }
 
   #updateBaseline(t, pulse) {
     const o = this.o;
     if (!known(pulse)) return;
-    if (this.firstPulseT === null) this.firstPulseT = t;
-    const elapsed = t - this.firstPulseT;
-
-    if (elapsed <= o.baselineSettleSeconds) {
-      this.early.push(pulse);
-      if (elapsed >= o.baselineMinSeconds) this.baseline = median(this.early);
-      return;
-    }
-    if (this.baseline === null) this.baseline = median(this.early.length ? this.early : [pulse]);
-
-    // Follow slow changes, but only while calm, so a burst of excitement does
-    // not drag the baseline up after it.
-    if (this.state === State.AWAKE || this.state === State.SLEEPY) {
-      const dt = this.lastT === null ? 0 : Math.max(0, t - this.lastT);
-      const k = 1 - Math.exp(-dt / o.baselineDriftSeconds);
-      this.baseline += (pulse - this.baseline) * k;
-    }
+    // Excitement must not drag the baseline up after it, so only calm readings
+    // count. Before a baseline exists everything counts, or it could never start.
+    if (this.state === State.EXCITED && this.baseline !== null) return;
+    const last = this.calm.at(-1);
+    if (last && t - last.t < 1) return;
+    this.calm.push({ t, pulse });
+    this.calmSeconds = Math.min(o.baselineWindowSeconds, this.calmSeconds + 1);
+    while (this.calm.length > o.baselineWindowSeconds) this.calm.shift();
+    if (this.calmSeconds >= o.baselineMinSeconds) this.baseline = median(this.calm.map((r) => r.pulse));
   }
 
   #target({ valid, hold, pulse, breathing }) {
@@ -93,7 +88,7 @@ export class PuppyBrain {
     if (known(breathing)) {
       const staying = this.state === State.SLEEPY;
       const slow = breathing < (staying ? o.sleepyExitBreaths : o.sleepyEnterBreaths);
-      const near = Math.abs(above) <= (staying ? o.sleepyExitNearBpm : o.sleepyEnterNearBpm);
+      const near = above <= (staying ? o.sleepyExitNearBpm : o.sleepyEnterNearBpm);
       if (slow && near) return State.SLEEPY;
     }
     return State.AWAKE;

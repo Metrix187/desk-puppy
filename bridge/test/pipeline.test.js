@@ -147,6 +147,24 @@ test('no breath-hold alarm while the source is complaining about the view', () =
   assert.equal(run(false), false, 'with advice showing (e.g. chest not visible) it is not');
 });
 
+test('a stable breathing rate stays on screen for 45 seconds, a pulse reading for 20', () => {
+  const p = new Pipeline();
+  p.onRates(0, { pulse: 72, breathing: 9 });
+  const at = (t) => {
+    p.onTrace(t, Math.sin(t), t);
+    return p.tick(t);
+  };
+  let out;
+  for (let t = 0; t <= 15; t += 0.1) out = at(t);
+  assert.equal(out.pulse, 72);
+  assert.equal(out.breathing, 9);
+  for (let t = 15; t <= 30; t += 0.1) out = at(t);
+  assert.ok(Number.isNaN(out.pulse), 'pulse has gone stale');
+  assert.equal(out.breathing, 9, 'breathing rate is still shown');
+  for (let t = 30; t <= 50; t += 0.1) out = at(t);
+  assert.ok(Number.isNaN(out.breathing), 'and then it goes stale as well');
+});
+
 test('one odd pulse reading does not move the number the puppy sees', () => {
   const p = new Pipeline();
   const readings = [90, 91, 89, 118, 90, 92, 60, 91, 90];

@@ -14,7 +14,11 @@ export class Pipeline {
     scaler = new ChestScaler(),
     staleSeconds = 5, // nothing at all from the source for this long = no signal
     traceStaleSeconds = 3, // no chest samples for this long = chest unknown
-    rateTtlSeconds = 20, // a rate older than this is shown as unknown
+    rateTtlSeconds = 20, // a pulse reading older than this is shown as unknown
+    // The SDK marks most breathing-rate readings as not stable; stable ones can
+    // be half a minute apart. Breathing rate also changes slowly, so the last
+    // stable one is kept longer than a pulse reading would be.
+    breathingTtlSeconds = 45,
     smoothSeconds = 6, // rates are the median of readings this recent
   } = {}) {
     this.smoothSeconds = smoothSeconds;
@@ -24,6 +28,7 @@ export class Pipeline {
     this.staleSeconds = staleSeconds;
     this.traceStaleSeconds = traceStaleSeconds;
     this.rateTtlSeconds = rateTtlSeconds;
+    this.breathingTtlSeconds = breathingTtlSeconds;
     // Assume someone is there until the source says otherwise; without data
     // arriving the signal is not valid anyway.
     this.tracked = true;
@@ -90,9 +95,9 @@ export class Pipeline {
   tick(now) {
     const valid = this.tracked && now - this.lastDataAt < this.staleSeconds;
     const traceFresh = now - this.lastTraceAt < this.traceStaleSeconds;
-    const fresh = (r) => (valid && now - r.at < this.rateTtlSeconds ? r.value : NaN);
-    const pulse = fresh(this.pulse);
-    const breathing = fresh(this.breathing);
+    const fresh = (r, ttl) => (valid && now - r.at < ttl ? r.value : NaN);
+    const pulse = fresh(this.pulse, this.rateTtlSeconds);
+    const breathing = fresh(this.breathing, this.breathingTtlSeconds);
     const hold = valid && traceFresh && this.detector.holding;
     const state = this.brain.update({ t: now, valid, hold, pulse, breathing });
     // While searching, the board is told nothing but the mood.
