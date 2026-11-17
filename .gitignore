@@ -1,0 +1,21 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local tooling (isolated PlatformIO install) and build output
+.tools/
+.pio/
+node_modules/
+
+# Flash dumps of the board (may contain Wi-Fi credentials from earlier firmware)
+backup/*
+!backup/.gitkeep
+
+# Editors and OS
+.vscode/
+.idea/
+.claude/
+Thumbs.db
+.DS_Store
+*.log

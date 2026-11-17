@@ -1,0 +1,22 @@
+{
+  "name": "desk-puppy-bridge",
+  "version": "1.0.0",
+  "description": "PC bridge for Desk Puppy: webcam -> Presage SmartSpectra SDK -> USB serial -> a pixel puppy on an ESP32 display",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "fake": "node src/index.js --fake",
+    "invert": "node src/index.js --invert",
+    "test": "node --test",
+    "set-key": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/set-api-key.ps1"
+  },
+  "dependencies": {
+    "@smartspectra/node-sdk": "^3.5.0",
+    "serialport": "^13.0.0"
+  }
+}
