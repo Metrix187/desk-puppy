@@ -25,6 +25,9 @@ Options
   --loose            also use readings the SDK has not marked as stable
   --debug            print one diagnostic line a second (what the SDK is sending, and
                      the line going to the board); terminal only, nothing is saved
+  --calibrate        guided two-minute run that tells you when to breathe and when
+                     to hold, and prints how the chest trace behaved in each
+                     phase (for tuning the hold detector; terminal only)
   --seconds <n>      stop by itself after n seconds
   --help
 `;
@@ -45,6 +48,7 @@ function parse() {
         loose: { type: 'boolean', default: false },
         debug: { type: 'boolean', default: false },
         seconds: { type: 'string' },
+        calibrate: { type: 'boolean', default: false },
         help: { type: 'boolean', short: 'h', default: false },
       },
     }).values;
@@ -189,7 +193,17 @@ async function main() {
   const now = () => performance.now() / 1000;
   let fatal = null;
 
-  source.on('trace', (raw, sampleT) => pipeline.onTrace(now(), raw, sampleT));
+  let calibration = null;
+  if (args.calibrate) {
+    const { Calibration } = await import('./calibrate.js');
+    calibration = new Calibration();
+  }
+
+  source.on('trace', (raw, sampleT) => {
+    const t = now();
+    pipeline.onTrace(t, raw, sampleT);
+    calibration?.onTrace(sampleT ?? t, raw);
+  });
   source.on('rates', (rates) => pipeline.onRates(now(), rates));
   // What the SDK last told us, for the status line and --debug.
   const seen = { present: true, advice: '', check: 'none yet', sdk: 'starting', anyData: false };
@@ -272,6 +286,10 @@ async function main() {
     const out = pipeline.tick(t);
     link?.send(out.line);
     if (fatal) return void shutdown(1);
+    if (calibration) {
+      if (calibration.tick()) shutdown(0);
+      return;
+    }
     if (!args.fake) hint = liveHint(out.state === 0);
     const extra = [hint, link && !link.connected ? 'board disconnected' : ''].filter(Boolean).join(' | ');
     if (args.debug) {

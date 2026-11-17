@@ -110,7 +110,8 @@ Useful options (after `--`, for example `npm start -- --port COM7`):
 | `--list-cameras` | List cameras without opening any |
 | `--list-ports` | List serial ports |
 | `--loose` | Also use readings the SDK has not marked as stable |
-| `--debug` | Print every line sent to the board |
+| `--debug` | Print one diagnostic line a second: what the SDK is sending and the line going to the board |
+| `--calibrate` | Guided two-minute run (`npm run calibrate`) that tells you when to breathe and when to hold, then prints how your chest trace behaved in each phase. For tuning the hold detector |
 | `--dry-run` | Run without a board |
 
 ### Tests

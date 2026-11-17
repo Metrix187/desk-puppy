@@ -11,6 +11,7 @@
   "scripts": {
     "start": "node src/index.js",
     "fake": "node src/index.js --fake",
+    "calibrate": "node src/index.js --calibrate",
     "invert": "node src/index.js --invert",
     "test": "node --test",
     "set-key": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/set-api-key.ps1"
