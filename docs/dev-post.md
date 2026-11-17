@@ -52,7 +52,7 @@ If you want to try it without a camera or an API key, `npm run fake` replays a s
 
 ## Code
 
-<!-- TODO: {% embed https://github.com/YOUR_USERNAME/desk-puppy %} -->
+{% embed https://github.com/Metrix187/desk-puppy %}
 
 Two small programs:
 
