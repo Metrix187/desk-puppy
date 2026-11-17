@@ -82,7 +82,7 @@ npm install
 npm run fake
 ```
 
-Fake mode needs no camera and no API key. It replays a scripted 80 second loop (calm, held breath, excited, sleepy) through the same hold detector and mood logic the live mode uses, so you can see every animation. The numbers are invented and the terminal says so.
+Fake mode needs no camera and no API key. It replays a scripted loop of about 100 seconds (calm, held breath, excited, sleepy) through the same hold detector and mood logic the live mode uses, so you can see every animation. The numbers are invented and the terminal says so.
 
 No board either? This prints what would be sent:
 
@@ -134,7 +134,8 @@ The SDK gives the bridge a pulse rate, a breathing rate and a chest movement tra
 | awake | everything else |
 
 - **Session baseline** is the median of your pulse over the first 30 seconds, after which it drifts slowly while the puppy is calm. It is "your usual for this sitting", nothing more.
-- **Breath hold.** The SDK lists an apnea metric but marks it unavailable, so the bridge has its own detector. It learns how far your chest trace normally swings and calls it a hold when the last 8 seconds swing less than a quarter of that. It ends as soon as you breathe again.
+- **Breath hold.** The SDK lists an apnea metric but marks it unavailable, so the bridge has its own detector. It spends the first half minute learning how far your chest trace normally swings over 8 seconds, and calls it a hold when the last 8 seconds swing less than a fifth of that. It ends as soon as you breathe again. Shifting in your chair makes jumps much bigger than a breath, so "normal" is taken from the quieter end of what it has seen, and no hold is raised while the SDK is complaining about the view (chest not visible, too dark and so on).
+- **Smoothing.** Pulse and breathing readings arrive about once a second and single ones can be well off, so the puppy follows the median of the last 6 seconds.
 - **No flicker.** Thresholds are wider for leaving a mood than for entering it, and a new mood has to persist for a couple of seconds before the puppy switches.
 
 These rules drive a cartoon. They are not measurements of sleepiness, excitement or anything else about you.

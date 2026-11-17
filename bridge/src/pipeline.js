@@ -27,6 +27,7 @@ export class Pipeline {
     // Assume someone is there until the source says otherwise; without data
     // arriving the signal is not valid anyway.
     this.tracked = true;
+    this.signalOk = true;
     this.lastDataAt = -Infinity;
     this.lastTraceAt = -Infinity;
     this.pulse = { value: NaN, at: -Infinity };
@@ -39,7 +40,10 @@ export class Pipeline {
     if (!Number.isFinite(raw)) return;
     this.lastTraceAt = now;
     this.lastDataAt = now;
-    this.detector.push(sampleT, raw, this.tracked);
+    // Holds are only looked for while the SDK is fully happy with the view.
+    // With the chest out of frame, for example, the chest trace is not worth
+    // raising an alarm over.
+    this.detector.push(sampleT, raw, this.tracked && this.signalOk);
     this.chest = this.scaler.push(sampleT, raw);
   }
 
@@ -66,7 +70,13 @@ export class Pipeline {
     this.lastDataAt = now;
   }
 
-  onTracking(now, ok) {
+  /**
+   * @param present  someone is in view
+   * @param signalOk the source has no complaints about the view (defaults to present)
+   */
+  onTracking(now, present, signalOk = present) {
+    const ok = present;
+    this.signalOk = !!signalOk;
     if (this.tracked && !ok) {
       // Whoever comes back into view may be someone else, or the same person
       // after a walk. Old numbers should not reappear as if they were fresh.

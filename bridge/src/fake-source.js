@@ -7,7 +7,8 @@
 import { EventEmitter } from 'node:events';
 
 export const SCRIPT = Object.freeze([
-  { name: 'calm', seconds: 16, pulse: 68, breathing: 14 },
+  // Long enough for the hold detector to learn what normal breathing looks like.
+  { name: 'calm', seconds: 32, pulse: 68, breathing: 14 },
   { name: 'held breath', seconds: 14, pulse: 70, breathing: 14, hold: true },
   { name: 'breathing again', seconds: 8, pulse: 71, breathing: 15 },
   { name: 'excited', seconds: 14, pulse: 97, breathing: 18 },

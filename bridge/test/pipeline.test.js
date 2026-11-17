@@ -132,6 +132,21 @@ test('advice from the source does not blank the puppy while data keeps flowing',
   assert.equal(out.state, State.AWAKE);
 });
 
+test('no breath-hold alarm while the source is complaining about the view', () => {
+  const run = (signalOk) => {
+    const p = new Pipeline();
+    let sawHold = false;
+    for (let t = 0; t < 60; t += 0.05) {
+      p.onTracking(t, true, signalOk);
+      p.onTrace(t, t < 40 ? Math.sin((2 * Math.PI * 12 * t) / 60) : 0.2, t);
+      if (p.tick(t).state === State.HOLD) sawHold = true;
+    }
+    return sawHold;
+  };
+  assert.equal(run(true), true, 'with a clean view the flat stretch is a hold');
+  assert.equal(run(false), false, 'with advice showing (e.g. chest not visible) it is not');
+});
+
 test('one odd pulse reading does not move the number the puppy sees', () => {
   const p = new Pipeline();
   const readings = [90, 91, 89, 118, 90, 92, 60, 91, 90];

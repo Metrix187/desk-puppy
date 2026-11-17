@@ -72,7 +72,7 @@ export class CameraSource extends EventEmitter {
       const nobody = code === ValidationCode.kNoFaceFound || code === ValidationCode.kMultipleFacesFound;
       const name = nameOf(ValidationCode, code);
       const advice = code === ValidationCode.kOk ? '' : this.#scrub(hint) || name;
-      this.emit('tracking', !nobody, advice, name);
+      this.emit('tracking', !nobody, advice, name, code === ValidationCode.kOk);
     });
 
     sdk.on('metrics', (buf) => {

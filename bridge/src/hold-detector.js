@@ -5,18 +5,27 @@
 // flat for about eight seconds while the person is still being tracked.
 //
 // "Nearly flat" is relative: the detector learns how far the trace normally
-// swings while breathing (the reference amplitude) and compares the swing of the
-// last eight seconds against a fraction of that. This is a toy heuristic for an
-// animation, not a measurement of anything.
+// swings over eight seconds of ordinary breathing (the reference) and compares
+// the swing of the last eight seconds against a fraction of that.
+//
+// Real traces are messier than a sine wave. Shifting in the chair or the camera
+// re-framing produces jumps several times the size of a breath. If those set the
+// reference, quiet breathing looks flat by comparison and the puppy cries wolf.
+// So the reference is a low percentile of recent swings rather than a typical
+// or large one, learning waits for the signal to settle, and nothing is declared
+// until there is about half a minute of breathing to compare against.
+//
+// This is a toy heuristic for an animation, not a measurement of anything.
 
 const DEFAULTS = Object.freeze({
   holdSeconds: 8, // how long the trace must stay flat
-  flatRatio: 0.25, // "flat" = swing below this fraction of the reference
+  flatRatio: 0.2, // "flat" = swing below this fraction of the reference
   releaseRatio: 0.5, // hold ends when a short window swings above this fraction
   releaseWindowSeconds: 2,
-  ampWindowSeconds: 5, // window used to learn the normal swing
-  ampHistory: 45, // how many one-per-second swing readings to remember
-  minAmpReadings: 6, // readings needed before a hold can be declared
+  settleSeconds: 8, // ignore this much after tracking starts before learning
+  ampHistory: 60, // how many one-per-second swing readings to remember
+  minAmpReadings: 12, // readings needed before a hold can be declared
+  referencePercentile: 0.35, // low on purpose, see above
   maxHoldSeconds: 75, // after this, assume the signal changed and relearn
   maxGapSeconds: 1.5, // a gap this long in the trace restarts the window
   minSamplesPerSecond: 2,
@@ -46,57 +55,64 @@ export class BreathHoldDetector {
     this.reset();
   }
 
-  /** Forget everything, including the learned reference amplitude. */
+  /** Forget everything, including the learned reference. */
   reset() {
-    this.samples = [];
     this.amps = [];
     this.lastAmpT = -Infinity;
-    this.holding = false;
-    this.holdStartT = null;
+    this.#restartWindow();
   }
 
-  /** Swing the trace normally shows while breathing, or null while still learning. */
+  #restartWindow() {
+    this.samples = [];
+    this.windowStartT = null;
+    this.holding = false;
+    this.holdStartT = null;
+    this.ratio = null;
+  }
+
+  /** Swing the trace normally shows over a hold-length window, or null while still learning. */
   get reference() {
-    return this.amps.length >= this.o.minAmpReadings ? percentile(this.amps, 0.75) : null;
+    return this.amps.length >= this.o.minAmpReadings
+      ? percentile(this.amps, this.o.referencePercentile)
+      : null;
   }
 
   /**
    * Feed one chest-trace sample.
    * @param {number} t        sample time in seconds (any monotonic origin)
    * @param {number} value    raw chest trace value
-   * @param {boolean} tracked whether the person is currently tracked with a usable signal
+   * @param {boolean} tracked whether the person is tracked with a signal the SDK is happy with
    * @returns {boolean} true while a breath hold is detected
    */
   push(t, value, tracked) {
     const o = this.o;
     if (!tracked || !Number.isFinite(value) || !Number.isFinite(t)) {
-      // Without tracking a flat trace means nothing. Keep the learned reference.
-      this.samples = [];
-      this.holding = false;
-      this.holdStartT = null;
+      // Without a trusted signal a flat trace means nothing. Keep the learned reference.
+      this.#restartWindow();
       return false;
     }
 
     const last = this.samples.at(-1);
-    if (last && (t <= last.t || t - last.t > o.maxGapSeconds)) {
+    if (last) {
       if (t <= last.t) return this.holding; // duplicate or out-of-order sample
-      this.samples = [];
-      this.holding = false;
-      this.holdStartT = null;
+      if (t - last.t > o.maxGapSeconds) this.#restartWindow();
     }
+    if (this.windowStartT === null) this.windowStartT = t;
 
     this.samples.push({ t, v: value });
-    const keep = Math.max(o.holdSeconds, o.ampWindowSeconds) + 1;
-    while (this.samples.length && this.samples[0].t < t - keep) this.samples.shift();
+    while (this.samples.length && this.samples[0].t < t - o.holdSeconds - 1) this.samples.shift();
 
     const spanned = t - this.samples[0].t;
+    const settled = t - this.windowStartT >= o.settleSeconds + o.holdSeconds;
+    const full = spanned >= o.holdSeconds - 0.25;
+    const { swing, n } = full ? range(this.samples, t - o.holdSeconds) : { swing: 0, n: 0 };
+    const enough = n >= o.minSamplesPerSecond * o.holdSeconds;
 
     // Learn the normal swing, once a second, while not holding.
-    if (!this.holding && t - this.lastAmpT >= 1 && spanned >= o.ampWindowSeconds) {
-      const { swing, n } = range(this.samples, t - o.ampWindowSeconds);
+    if (!this.holding && settled && enough && t - this.lastAmpT >= 1) {
       const ref = this.reference;
       const looksFlat = ref !== null && swing < o.flatRatio * ref;
-      if (n >= o.minSamplesPerSecond * o.ampWindowSeconds && swing > 0 && !looksFlat) {
+      if (swing > 0 && !looksFlat) {
         this.amps.push(swing);
         if (this.amps.length > o.ampHistory) this.amps.shift();
       }
@@ -104,26 +120,21 @@ export class BreathHoldDetector {
     }
 
     const ref = this.reference;
+    this.ratio = ref !== null && enough ? swing / ref : null;
     if (ref === null) return (this.holding = false);
 
     if (!this.holding) {
-      if (spanned >= o.holdSeconds - 0.25) {
-        const { swing, n } = range(this.samples, t - o.holdSeconds);
-        if (n >= o.minSamplesPerSecond * o.holdSeconds && swing < o.flatRatio * ref) {
-          this.holding = true;
-          this.holdStartT = t;
-        }
+      if (enough && swing < o.flatRatio * ref) {
+        this.holding = true;
+        this.holdStartT = t;
       }
     } else if (t - this.holdStartT > o.maxHoldSeconds) {
       // Flat for far too long: more likely the signal changed scale than a real
       // hold. Start over and relearn what normal looks like.
       this.reset();
-    } else {
-      const { swing } = range(this.samples, t - o.releaseWindowSeconds);
-      if (swing > o.releaseRatio * ref) {
-        this.holding = false;
-        this.holdStartT = null;
-      }
+    } else if (range(this.samples, t - o.releaseWindowSeconds).swing > o.releaseRatio * ref) {
+      this.holding = false;
+      this.holdStartT = null;
     }
     return this.holding;
   }

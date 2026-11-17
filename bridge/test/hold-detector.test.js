@@ -154,6 +154,45 @@ test('a hold that never ends is abandoned and the detector relearns', () => {
   assert.ok(events[1].t - events[0].t > 29);
 });
 
+// The next three come from a real session: shifting in the chair produced
+// jumps several times the size of a breath, and quiet breathing afterwards was
+// being mistaken for a hold.
+
+const fidget = { seconds: 2, breaths: 30, amp: 6 };
+const quiet = (seconds) => ({ seconds, breaths: 8 });
+
+test('movement bigger than a breath does not make quiet breathing look like a hold', () => {
+  const segments = [];
+  for (let i = 0; i < 8; i++) segments.push(quiet(23), fidget);
+  assert.deepEqual(run(new BreathHoldDetector(), segments), []);
+});
+
+test('a rough start does not cause false alarms once things settle', () => {
+  const events = run(new BreathHoldDetector(), [{ seconds: 10, breaths: 20, amp: 5 }, quiet(150)]);
+  assert.deepEqual(events, []);
+});
+
+test('a real hold is still caught in a session with movement', () => {
+  const events = run(new BreathHoldDetector(), [quiet(23), fidget, quiet(23), fidget, quiet(20), { seconds: 15 }]);
+  assert.deepEqual(
+    events.map((e) => e.holding),
+    [true],
+  );
+});
+
+test('shallow breathing, a third of the usual depth, is not a hold', () => {
+  const events = run(new BreathHoldDetector(), [quiet(40), { seconds: 60, breaths: 8, amp: 0.35 }]);
+  assert.deepEqual(events, []);
+});
+
+test('nothing is declared in the first twenty seconds, however flat', () => {
+  const d = new BreathHoldDetector();
+  for (let t = 0; t < 20; t += 0.05) {
+    const v = t < 6 ? Math.sin((2 * Math.PI * 14 * t) / 60) : 0.3;
+    assert.equal(d.push(t, v, true), false);
+  }
+});
+
 test('bad samples are ignored without throwing', () => {
   const d = new BreathHoldDetector();
   assert.equal(d.push(NaN, 1, true), false);
