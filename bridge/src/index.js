@@ -206,7 +206,19 @@ async function main() {
   source.on('packet', (p) => {
     second.packets++;
     second.newTrace += p.newTrace;
-    second.last = p;
+    // Rates come in the odd packet, not every one: keep the best seen this second.
+    const prev = second.last;
+    second.last = prev
+      ? {
+          ...p,
+          upper: Math.max(prev.upper, p.upper),
+          lower: Math.max(prev.lower, p.lower),
+          rate: Math.max(prev.rate, p.rate),
+          rateStable: prev.rateStable || (p.rate > 0 && p.rateStable),
+          pulse: Math.max(prev.pulse, p.pulse),
+          pulseStable: prev.pulseStable || (p.pulse > 0 && p.pulseStable),
+        }
+      : p;
     if (p.upper || p.lower || p.rate || p.pulse) {
       seen.anyData = true;
       pipeline.onData(now());

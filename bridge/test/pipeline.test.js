@@ -132,6 +132,18 @@ test('advice from the source does not blank the puppy while data keeps flowing',
   assert.equal(out.state, State.AWAKE);
 });
 
+test('one odd pulse reading does not move the number the puppy sees', () => {
+  const p = new Pipeline();
+  const readings = [90, 91, 89, 118, 90, 92, 60, 91, 90];
+  const shown = [];
+  readings.forEach((pulse, i) => {
+    p.onTrace(i, Math.sin(i), i);
+    p.onRates(i, { pulse });
+    shown.push(p.tick(i).pulse);
+  });
+  for (const v of shown.slice(3).filter(Number.isFinite)) assert.ok(v >= 89 && v <= 92, `showed ${v}`);
+});
+
 test('packets with nothing usable in them keep the signal alive but show no numbers', () => {
   const p = new Pipeline();
   let out;
