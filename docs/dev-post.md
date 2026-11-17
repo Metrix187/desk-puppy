@@ -23,7 +23,7 @@ My PC's built-in webcam is the only sensor. The Presage SmartSpectra SDK reads m
 - Its chest rises and falls with my actual breathing trace, not a canned animation.
 - When my breathing slows down and my pulse is at its usual level, it closes its eyes and dozes.
 - When my pulse is well above my usual level, it gets the zoomies.
-- When I hold my breath, after about eight seconds it starts pawing at the glass and tells me to breathe.
+- When I hold my breath, after about ten seconds it starts pawing at the glass and tells me to breathe.
 - When I walk away, it looks around for me.
 
 I wanted to see what these signals feel like when they are not on a dashboard. A number that says 72 is information. A tail that keeps time with you is something else.
@@ -92,7 +92,7 @@ sdk.start();
 
 **Chest trace to chest.** The trace arrives in arbitrary units. The bridge centres it, scales it by the size of my recent breaths, and sends a value from -100 to 100. The scale adapts slowly on purpose, so a held breath looks flat instead of having noise stretched to full height.
 
-**Breath holds.** The SDK lists an apnea metric but marks it unavailable, so I wrote a detector. It learns how far the chest trace normally swings while I breathe, and reports a hold when the last eight seconds swing less than a quarter of that while the SDK still says it can see me. It lets go as soon as a real breath shows up.
+**Breath holds.** The SDK lists an apnea metric but marks it unavailable, so I wrote a detector. My first version looked for a flat trace and never fired, because a held breath does not flatten the trace: the breathing wave goes away, but a ripple at about heartbeat rate stays, roughly a third the size of a breath. The version that works smooths the trace over one second to remove that ripple, learns how far the result normally swings over eight seconds while I breathe, and reports a hold when the swing stays under four tenths of that while the SDK still says it can see me. It lets go within a few seconds of the next breath. I found the right measure with a small calibration mode that tells me when to breathe and when to hold and prints how the trace behaved in each phase.
 
 **Moods.** The rules are short:
 

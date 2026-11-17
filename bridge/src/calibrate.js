@@ -86,7 +86,7 @@ export class Calibration {
     this.rows.push({ phase: p.name, hold: !!p.hold, pure, s8, s5 });
     const e = (x) => x.toExponential(2);
     this.print(
-      `[cal] ${p.name.padEnd(8)} ${String(Math.ceil(at.left)).padStart(2)}s left  raw8=${e(s8.raw)} det8=${e(s8.detrended)} det5=${e(s5.detrended)} ripple=${e(s8.ripple)} turns/s=${s8.reversals.toFixed(2)}${pure ? '' : ' (mixed)'}  trace=[${shape.join(',')}]`,
+      `[cal] ${p.name.padEnd(8)} ${String(Math.ceil(at.left)).padStart(2)}s left  raw8=${e(s8.raw)} slow8=${e(s8.slow)} det8=${e(s8.detrended)} det5=${e(s5.detrended)} ripple=${e(s8.ripple)} turns/s=${s8.reversals.toFixed(2)}${pure ? '' : ' (mixed)'}  trace=[${shape.join(',')}]`,
     );
     return false;
   }
@@ -95,12 +95,14 @@ export class Calibration {
     const normal = this.rows.filter((r) => !r.hold && r.pure && r.phase !== 'settle');
     const base = {
       raw8: median(normal.map((r) => r.s8.raw)),
+      slow8: median(normal.map((r) => r.s8.slow)),
       det8: median(normal.map((r) => r.s8.detrended)),
       det5: median(normal.map((r) => r.s5.detrended)),
       ripple: median(normal.map((r) => r.s8.ripple)),
     };
     this.print('\n=== Summary: each number is relative to the median of normal breathing ===');
-    this.print('phase      n   raw8 min/med/max      det8 min/med/max      det5 min/med/max      ripple min/med/max    turns/s med');
+    this.print('slow8 is what the hold detector uses: a hold needs it to stay under 0.40.');
+    this.print('phase      n   raw8 min/med/max      slow8 min/med/max     det8 min/med/max      det5 min/med/max      ripple min/med/max    turns/s med');
     const names = [...new Set(this.rows.map((r) => r.phase))];
     for (const name of names) {
       const rows = this.rows.filter((r) => r.phase === name && r.pure);
@@ -110,7 +112,7 @@ export class Calibration {
         return `${Math.min(...v).toFixed(2)}/${median(v).toFixed(2)}/${Math.max(...v).toFixed(2)}`.padEnd(22);
       };
       this.print(
-        `${name.padEnd(10)} ${String(rows.length).padStart(2)}  ${col((r) => r.s8.raw, base.raw8)}${col((r) => r.s8.detrended, base.det8)}${col((r) => r.s5.detrended, base.det5)}${col((r) => r.s8.ripple, base.ripple)}${median(rows.map((r) => r.s8.reversals)).toFixed(2)}`,
+        `${name.padEnd(10)} ${String(rows.length).padStart(2)}  ${col((r) => r.s8.raw, base.raw8)}${col((r) => r.s8.slow, base.slow8)}${col((r) => r.s8.detrended, base.det8)}${col((r) => r.s5.detrended, base.det5)}${col((r) => r.s8.ripple, base.ripple)}${median(rows.map((r) => r.s8.reversals)).toFixed(2)}`,
       );
     }
     this.print('=== End of calibration. Nothing was saved. ===\n');

@@ -98,7 +98,23 @@ export function windowStats(samples, now, seconds) {
   slices.sort((x, y) => x - y);
   const ripple = slices.length ? slices[slices.length >> 1] : 0;
 
-  return { raw: hi - lo, detrended, reversals: turns / seconds, ripple, mean: mv, n: w.length };
+  // Swing of the one-second moving average: what is left once the fast ripple
+  // is smoothed away. This is the number the hold detector uses.
+  let slo = Infinity;
+  let shi = -Infinity;
+  let sum = 0;
+  let head = 0;
+  for (let i = 0; i < w.length; i++) {
+    sum += w[i].v;
+    while (w[head].t < w[i].t - 1) sum -= w[head++].v;
+    if (w[i].t - w[0].t < 1) continue;
+    const avg = sum / (i - head + 1);
+    if (avg < slo) slo = avg;
+    if (avg > shi) shi = avg;
+  }
+  const slow = shi >= slo ? shi - slo : 0;
+
+  return { raw: hi - lo, detrended, slow, reversals: turns / seconds, ripple, mean: mv, n: w.length };
 }
 
 export function median(values) {

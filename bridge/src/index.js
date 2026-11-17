@@ -255,8 +255,9 @@ async function main() {
     second.packets = 0;
     second.newTrace = 0;
     second.last = null;
-    // swing = how much the chest trace moved in the last 8 s, as a fraction of
-    // what is normal for this session. A hold is declared below 0.20.
+    // swing = how much the smoothed chest trace moved in the last 8 s, as a
+    // fraction of what is normal for this session. A hold is declared when it
+    // stays below 0.40.
     const d = pipeline.detector;
     const swing = d.reference === null ? `learning ${d.amps.length}/${d.o.minAmpReadings}` : d.ratio === null ? 'n/a' : d.ratio.toFixed(2);
     return `[debug] sdk=${seen.sdk} check=${seen.check}${seen.advice ? ` "${seen.advice}"` : ''} ${shape} swing=${swing} hold=${d.holding ? 'yes' : 'no'} | ${STATE_NAMES[out.state]} ${out.line.trim()}`;

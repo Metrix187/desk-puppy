@@ -1,32 +1,42 @@
 // Breath-hold detector.
 //
 // The SmartSpectra SDK has no usable apnea metric, so this watches the chest
-// movement trace instead. A hold is declared when the trace has stayed nearly
-// flat for about eight seconds while the person is still being tracked.
+// movement trace instead and reports a hold when the slow breathing wave has
+// been missing from it for about eight seconds.
 //
-// "Nearly flat" is relative: the detector learns how far the trace normally
-// swings over eight seconds of ordinary breathing (the reference) and compares
-// the swing of the last eight seconds against a fraction of that.
+// What a real held breath looks like (measured with `npm run calibrate`):
+// the trace does not go flat. The breathing wave disappears, but a fast ripple
+// at about heartbeat rate stays, roughly a third the size of a breath, along
+// with some slow wander. So "is it flat" is the wrong question. Instead:
 //
-// Real traces are messier than a sine wave. Shifting in the chair or the camera
-// re-framing produces jumps several times the size of a breath. If those set the
-// reference, quiet breathing looks flat by comparison and the puppy cries wolf.
-// So the reference is a low percentile of recent swings rather than a typical
-// or large one, learning waits for the signal to settle, and nothing is declared
-// until there is about half a minute of breathing to compare against.
+//   1. Smooth the trace over one second. That removes most of the ripple and
+//      keeps the breathing wave, which is much slower.
+//   2. Measure how far the smoothed trace swings over the last eight seconds.
+//   3. Compare with what is normal for this person in this session. Under
+//      four tenths of normal, for a couple of seconds running, is a hold.
+//
+// "Normal" is learned from the session, from the quieter half of what has been
+// seen: shifting in the chair makes jumps several times the size of a breath,
+// and those must not set the bar. Learning waits for the signal to settle, and
+// nothing is declared until there is about half a minute to compare against.
 //
 // This is a toy heuristic for an animation, not a measurement of anything.
 
 const DEFAULTS = Object.freeze({
-  holdSeconds: 8, // how long the trace must stay flat
-  flatRatio: 0.2, // "flat" = swing below this fraction of the reference
-  releaseRatio: 0.5, // hold ends when a short window swings above this fraction
-  releaseWindowSeconds: 2,
+  holdSeconds: 8, // window the breathing wave must be missing from
+  // Moving average that removes the heartbeat-rate ripple. One second takes out
+  // most of it without also flattening fast breathing (30 breaths a minute
+  // still keeps about two thirds of its swing).
+  smoothSeconds: 1,
+  flatRatio: 0.4, // "missing" = smoothed swing below this fraction of normal
+  confirmSeconds: 1.5, // and it has to stay that way this long
+  releaseRatio: 0.55, // hold ends when the window swings above this fraction...
+  releaseWindowSeconds: 3, // ...or a breath this recent swings above half of normal
   settleSeconds: 8, // ignore this much after tracking starts before learning
   ampHistory: 60, // how many one-per-second swing readings to remember
   minAmpReadings: 12, // readings needed before a hold can be declared
-  referencePercentile: 0.35, // low on purpose, see above
-  maxHoldSeconds: 75, // after this, assume the signal changed and relearn
+  referencePercentile: 0.4, // "normal" comes from the quieter side, see above
+  maxHoldSeconds: 45, // after this, assume breathing got shallower and relearn
   maxGapSeconds: 1.5, // a gap this long in the trace restarts the window
   minSamplesPerSecond: 2,
 });
@@ -55,7 +65,7 @@ export class BreathHoldDetector {
     this.reset();
   }
 
-  /** Forget everything, including the learned reference. */
+  /** Forget everything, including what normal looks like. */
   reset() {
     this.amps = [];
     this.lastAmpT = -Infinity;
@@ -63,14 +73,17 @@ export class BreathHoldDetector {
   }
 
   #restartWindow() {
-    this.samples = [];
+    this.raw = []; // recent raw samples, for smoothing
+    this.rawSum = 0;
+    this.samples = []; // smoothed samples
     this.windowStartT = null;
+    this.flatSince = null;
     this.holding = false;
     this.holdStartT = null;
     this.ratio = null;
   }
 
-  /** Swing the trace normally shows over a hold-length window, or null while still learning. */
+  /** Normal eight-second swing of the smoothed trace, or null while still learning. */
   get reference() {
     return this.amps.length >= this.o.minAmpReadings
       ? percentile(this.amps, this.o.referencePercentile)
@@ -87,20 +100,26 @@ export class BreathHoldDetector {
   push(t, value, tracked) {
     const o = this.o;
     if (!tracked || !Number.isFinite(value) || !Number.isFinite(t)) {
-      // Without a trusted signal a flat trace means nothing. Keep the learned reference.
+      // Without a trusted signal a quiet trace means nothing. Keep what was learned.
       this.#restartWindow();
       return false;
     }
 
-    const last = this.samples.at(-1);
+    const last = this.raw.at(-1);
     if (last) {
       if (t <= last.t) return this.holding; // duplicate or out-of-order sample
       if (t - last.t > o.maxGapSeconds) this.#restartWindow();
     }
     if (this.windowStartT === null) this.windowStartT = t;
 
-    this.samples.push({ t, v: value });
-    while (this.samples.length && this.samples[0].t < t - o.holdSeconds - 1) this.samples.shift();
+    // Moving average over the last smoothSeconds.
+    this.raw.push({ t, v: value });
+    this.rawSum += value;
+    while (this.raw[0].t < t - o.smoothSeconds) this.rawSum -= this.raw.shift().v;
+    if (t - this.windowStartT < o.smoothSeconds) return this.holding;
+
+    this.samples.push({ t, v: this.rawSum / this.raw.length });
+    while (this.samples[0].t < t - o.holdSeconds - 1) this.samples.shift();
 
     const spanned = t - this.samples[0].t;
     const settled = t - this.windowStartT >= o.settleSeconds + o.holdSeconds;
@@ -111,8 +130,8 @@ export class BreathHoldDetector {
     // Learn the normal swing, once a second, while not holding.
     if (!this.holding && settled && enough && t - this.lastAmpT >= 1) {
       const ref = this.reference;
-      const looksFlat = ref !== null && swing < o.flatRatio * ref;
-      if (swing > 0 && !looksFlat) {
+      const looksHeld = ref !== null && swing < o.flatRatio * ref;
+      if (swing > 0 && !looksHeld) {
         this.amps.push(swing);
         if (this.amps.length > o.ampHistory) this.amps.shift();
       }
@@ -121,20 +140,32 @@ export class BreathHoldDetector {
 
     const ref = this.reference;
     this.ratio = ref !== null && enough ? swing / ref : null;
-    if (ref === null) return (this.holding = false);
+    if (this.ratio === null) {
+      this.flatSince = null;
+      return (this.holding = false);
+    }
 
     if (!this.holding) {
-      if (enough && swing < o.flatRatio * ref) {
-        this.holding = true;
-        this.holdStartT = t;
+      if (this.ratio < o.flatRatio) {
+        this.flatSince ??= t;
+        if (t - this.flatSince >= o.confirmSeconds) {
+          this.holding = true;
+          this.holdStartT = t;
+        }
+      } else {
+        this.flatSince = null;
       }
     } else if (t - this.holdStartT > o.maxHoldSeconds) {
-      // Flat for far too long: more likely the signal changed scale than a real
-      // hold. Start over and relearn what normal looks like.
+      // Quiet for far too long: more likely breathing got shallower or the
+      // signal changed scale. Start over and relearn what normal looks like.
       this.reset();
-    } else if (range(this.samples, t - o.releaseWindowSeconds).swing > o.releaseRatio * ref) {
+    } else if (
+      this.ratio > o.releaseRatio ||
+      range(this.samples, t - o.releaseWindowSeconds).swing > 0.5 * ref
+    ) {
       this.holding = false;
       this.holdStartT = null;
+      this.flatSince = null;
     }
     return this.holding;
   }

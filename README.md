@@ -129,13 +129,14 @@ The SDK gives the bridge a pulse rate, a breathing rate and a chest movement tra
 | Mood | When |
 | --- | --- |
 | searching | nobody is tracked, or the signal is not usable |
-| breath held | the chest trace has been nearly flat for about 8 seconds while you are still tracked |
+| breath held | the breathing wave has been missing from the chest trace for about 8 seconds while you are still tracked |
 | excited | pulse more than 15 bpm above your session baseline |
 | sleepy | breathing under 10 breaths a minute and pulse within 8 bpm of your baseline |
 | awake | everything else |
 
 - **Session baseline** is the median of your pulse over the first 30 seconds, after which it drifts slowly while the puppy is calm. It is "your usual for this sitting", nothing more.
-- **Breath hold.** The SDK lists an apnea metric but marks it unavailable, so the bridge has its own detector. It spends the first half minute learning how far your chest trace normally swings over 8 seconds, and calls it a hold when the last 8 seconds swing less than a fifth of that. It ends as soon as you breathe again. Shifting in your chair makes jumps much bigger than a breath, so "normal" is taken from the quieter end of what it has seen, and no hold is raised while the SDK is complaining about the view (chest not visible, too dark and so on).
+- **Breath hold.** The SDK lists an apnea metric but marks it unavailable, so the bridge has its own detector. When I measured a real held breath, the chest trace did not go flat: the breathing wave disappeared but a ripple at about heartbeat rate stayed, roughly a third the size of a breath. So the detector smooths the trace over one second to remove the ripple, then checks how far it swings over the last 8 seconds. It spends the first half minute learning what is normal for you, and calls it a hold when the swing stays under four tenths of that. It lets go within a few seconds of the next breath. Shifting in your chair makes jumps much bigger than a breath, so "normal" is taken from the quieter side of what it has seen, and no hold is raised while the SDK is complaining about the view (chest not visible, too dark and so on).
+- **Its limits.** Expect the puppy to react about 10 seconds into a hold. Breathing that suddenly becomes very shallow, under about four tenths of your usual depth, looks the same as a hold to this detector; if that lasts 45 seconds it gives up and relearns. `npm run calibrate` shows how your own trace behaves if you want to retune it.
 - **Smoothing.** Pulse and breathing readings arrive about once a second and single ones can be well off, so the puppy follows the median of the last 6 seconds.
 - **No flicker.** Thresholds are wider for leaving a mood than for entering it, and a new mood has to persist for a couple of seconds before the puppy switches.
 
