@@ -4,13 +4,6 @@ published: false
 tags: devchallenge, presagechallenge, esp32, node
 ---
 
-<!--
-DRAFT. Things to fill in before publishing are marked TODO.
-Every claim below about live mode should be checked against what you actually
-see on your desk once you have run it with the camera. Cut anything that did
-not hold up.
--->
-
 *This is a submission for the [Presage SmartSpectra SDK Challenge](https://dev.to/challenges/presage-2026-11-04)*
 
 ## What I Built
@@ -28,16 +21,13 @@ My PC's built-in webcam is the only sensor. The Presage SmartSpectra SDK reads m
 
 I wanted to see what these signals feel like when they are not on a dashboard. A number that says 72 is information. A tail that keeps time with you is something else.
 
-<!-- TODO: one or two sentences in your own words about what it was like once it was running on your desk. -->
-
-
 It is a toy. It does not diagnose, treat or monitor anything, and I would not trust it with a health decision.
 
 ## Demo
 
-<!-- TODO: embed the demo video here, e.g. {% embed https://www.youtube.com/watch?v=... %} -->
+{% embed https://www.youtube.com/watch?v=zhyjDfrWGgY %}
 
-<!-- TODO: one photo of the display on the desk, with alt text. -->
+![The Desk Puppy display while I hold my breath: the puppy lifts a paw towards the glass and the screen says "hey! breathe!", with 77 bpm and 12.4 breaths per minute shown below](https://raw.githubusercontent.com/Metrix187/desk-puppy/main/docs/img/desk-puppy-hold.jpg)
 
 The video is one take in real time. The left side is a recording of the terminal window running the bridge; the right side is my phone pointed at the display. The webcam is pointed at me and is not shown. Approximate times:
 
@@ -110,7 +100,13 @@ The baseline is the median of my pulse over the last three minutes of calm. A we
 
 The SDK also reports why it cannot measure (too dark, face not centred, too far). The bridge only treats the signal as valid when that status is OK, and by default it only uses rates the SDK has marked stable. When it is not sure, the puppy shows `--` rather than a guess.
 
-<!-- TODO: add one or two honest observations from real use. How long did rates take to appear? Did the hold detector need tuning? Did anything not work? -->
+A few things I only learned by using it:
+
+- The SDK will not start measuring in a dim room. It reports "Increase light on face" and waits, so the bridge shows that message instead of looking frozen.
+- The chest trace arrives within a few seconds, pulse after about fifteen, and a stable breathing rate can take up to a minute.
+- Single pulse readings can be well off their neighbours, so the puppy follows the median of the last six seconds.
+- Most breathing-rate readings arrive marked as not stable. The last stable one stays on screen for up to 45 seconds.
+- The breath-hold detector took three attempts. The first was too jumpy, the second never fired, and the third came out of measuring a real held breath.
 
 ## Prize Categories
 
@@ -132,14 +128,4 @@ Most Creative or Delightful Use.
 
 ## Agent Session
 
-<!--
-TODO: this section is optional in the template. Decide whether to keep it.
-If you keep it, embed the session with {% agent_session <id_or_slug> %} after
-checking the transcript for keys or anything private. Note that DEV's AI
-guidelines ask for AI assistance to be disclosed somewhere in the post, so if
-you cut this section, say it another way.
--->
-
-I built this with Claude Code as a coding agent. I came in with the idea, the hardware, the serial protocol and a first draft of the firmware. The agent got the firmware building in an isolated PlatformIO install, backed up and flashed the board, read the SmartSpectra docs and the SDK's type declarations, and wrote the bridge, the breath-hold detector, the mood logic and their tests. I did the parts that need a person in the room: checking the screen, sitting in front of the camera, and deciding when the puppy felt right.
-
-<!-- TODO: add what you changed or tuned yourself after trying it live. -->
+I built this with Claude Code as a coding agent. I came in with the idea, the hardware, the serial protocol and a first draft of the firmware. The agent got the firmware building in an isolated PlatformIO install, backed up and flashed the board, read the SmartSpectra docs and the SDK's type declarations, and wrote the bridge, the breath-hold detector, the mood logic and their tests. I did the parts that need a person in the room: checking the screen, sitting in front of the camera, holding my breath on cue for the calibration run, and deciding when the puppy felt right. The tuning followed what I reported back: too sensitive, then not triggering at all, then working.

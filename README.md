@@ -2,6 +2,10 @@
 
 A pixel puppy on a small ESP32 display that reacts to your live pulse and breathing.
 
+![Three photos of the Desk Puppy display: awake, pawing at the glass during a held breath, and asleep](docs/img/cover.jpg)
+
+Demo video (2:26, one take): https://www.youtube.com/watch?v=zhyjDfrWGgY
+
 Your PC's webcam watches you (after you say yes). The [Presage SmartSpectra SDK](https://smartspectra.presagetech.com/docs/nodejs) estimates your pulse and breathing from the video, and a small Node program passes four numbers over USB to the display. The puppy does the rest:
 
 - its tail wags once per heartbeat
