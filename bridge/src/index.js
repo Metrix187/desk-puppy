@@ -241,7 +241,9 @@ async function main() {
 
   const liveHint = (searching) => {
     if (!seen.present) return seen.advice || 'nobody in view';
-    if (!seen.anyData) return [`waiting for the SDK (${seen.sdk})`, seen.advice].filter(Boolean).join(', ');
+    // The SDK's own advice goes first: it is what the person can act on, and a
+    // narrow terminal cuts off whatever comes last.
+    if (!seen.anyData) return seen.advice ? `${seen.advice} (SDK ${seen.sdk})` : `waiting for the SDK (${seen.sdk})`;
     if (searching) return seen.advice || 'the SDK has stopped sending data';
     return seen.advice;
   };
