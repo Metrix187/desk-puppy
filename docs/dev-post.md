@@ -82,7 +82,7 @@ sdk.start();
 
 **Pulse to tail.** The firmware advances the wag by one full swing per beat, so the tail is a metronome for my heart rate.
 
-**Chest trace to chest.** The trace arrives in arbitrary units. The bridge centres it, scales it by the size of my recent breaths, and sends a value from -100 to 100. The scale adapts slowly on purpose, so a held breath looks flat instead of having noise stretched to full height.
+**Chest trace to chest.** The trace arrives in arbitrary units. The bridge centres it, scales it by the size of my recent breaths, and sends a value from -100 to 100. The scale adapts slowly on purpose, so the small movements left during a held breath are not stretched back up to full height.
 
 **Breath holds.** The SDK lists an apnea metric but marks it unavailable, so I wrote a detector. My first version looked for a flat trace and never fired, because a held breath does not flatten the trace: the breathing wave goes away, but a ripple at about heartbeat rate stays, roughly a third the size of a breath. The version that works smooths the trace over one second to remove that ripple, learns how far the result normally swings over eight seconds while I breathe, and reports a hold when the swing stays under four tenths of that while the SDK still says it can see me. It lets go within a few seconds of the next breath. I found the right measure with a small calibration mode that tells me when to breathe and when to hold and prints how the trace behaved in each phase.
 
@@ -98,7 +98,7 @@ sdk.start();
 
 The baseline is the median of my pulse over the last three minutes of calm. A webcam pulse wanders by ten beats or so while I sit still, so a baseline fixed at the start went stale within minutes. To keep the puppy from flickering between moods at a threshold, each mood is harder to leave than to enter and has to persist for a couple of seconds before it shows.
 
-The SDK also reports why it cannot measure (too dark, face not centred, too far). The bridge only treats the signal as valid when that status is OK, and by default it only uses rates the SDK has marked stable. When it is not sure, the puppy shows `--` rather than a guess.
+The SDK also reports why it is unhappy with the view (too dark, face not centred, chest not visible). "No face" sends the puppy looking for me. The other complaints are shown in the terminal as advice while the puppy carries on, but a breath hold is only looked for while the status is OK. By default the bridge only uses rates the SDK has marked stable, and when it has none the puppy shows `--` rather than a guess.
 
 A few things I only learned by using it:
 
