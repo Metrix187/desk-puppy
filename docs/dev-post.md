@@ -39,14 +39,16 @@ It is a toy. It does not diagnose, treat or monitor anything, and I would not tr
 
 <!-- TODO: one photo of the display on the desk, with alt text. -->
 
-What the video shows, in order:
+The video is one take in real time. The left side is a recording of the terminal window running the bridge; the right side is my phone pointed at the display. The webcam is pointed at me and is not shown. Approximate times:
 
-1. Starting the bridge, the consent prompt, and typing `yes`.
-2. The puppy waking up when it finds me; tail and chest following my pulse and breathing.
-3. Holding my breath until it paws at the glass.
-4. Slow breathing until it falls asleep.
-5. <!-- TODO: whatever you did to get your pulse up --> and the zoomies.
-6. Walking out of frame.
+- 0:00 The consent prompt. Nothing has opened the camera yet and the puppy says "waiting for PC".
+- 0:08 I type `yes`. The terminal prints the SmartSpectra SDK version and finds the board.
+- 0:20 The puppy wakes up. Its chest starts following my breathing, then pulse and breathing rate appear.
+- 1:24 I have been holding my breath for about ten seconds. The terminal says "breath held" and the puppy paws at the glass until I breathe again.
+- 2:03 I have been breathing slowly. The puppy falls asleep.
+- 2:22 I stop the bridge with Ctrl+C, and a few seconds later the puppy goes back to "waiting for PC".
+
+The excited mood (zoomies) is not in this take.
 
 If you want to try it without a camera or an API key, `npm run fake` replays a scripted sequence (calm, held breath, excited, sleepy) through the same logic, and `npm run fake -- --dry-run` does it without the board.
 
